@@ -15,6 +15,7 @@ This repository is the wedge-first proof of one narrow, falsifiable claim: **the
 | `data_real.py` | The real-data layer: FRED realized truth, ALFRED release-and-revision vintages, and FMP real-time financial signals — the three `# SWAP POINT`s, made live. |
 | `backtest_real.py` | The keystone experiment on **real** data with the **real** committee: stale official vintage vs. the same committee also given real-time signals, scored against realized outcomes, with multi-run averaging. |
 | `config.py` | Loads `.env` and trusts the OS certificate store so HTTPS works behind a corporate proxy. |
+| `DATA-SOURCES.md` | The target data dashboard: verified series IDs, what leads vs. mirrors policy, FMP/scraping/vendor tiers, and build order. |
 | `program.md` | The agentic committee charter, in the `autoresearch` style. |
 | `Agentic-Fed-Taskforce-Blueprint.md` | The full design, architecture, and build strategy. |
 | `EXPERIMENT.md` | What the synthetic experiment proves and does not. |

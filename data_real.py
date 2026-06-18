@@ -111,6 +111,31 @@ def _yoy_from_index(obs: list[dict], ref_date: str) -> float | None:
     return round(100.0 * (by_date[ref_date] / by_date[prior] - 1.0), 3)
 
 
+def _fred_latest_asof(series_id: str, as_of: str, lookback_days: int = 500):
+    """Latest (date, value) for a series no later than as_of, as known at as_of
+    (ALFRED vintage). Fully no-look-ahead. Returns None if nothing available."""
+    start = (datetime.strptime(as_of, "%Y-%m-%d")
+             - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    obs = _fred_observations(series_id, as_of=as_of, start=start, end=as_of)
+    return _latest_value(obs)
+
+
+def _fred_change_asof(series_id: str, as_of: str, lookback_days: int = 35):
+    """
+    (latest_value, change_over_window, latest_date) for a series as known at
+    as_of -- the recent momentum a real-time watcher would see. Window defaults
+    to ~5 weeks (good for weekly series like jobless claims). No look-ahead.
+    """
+    start = (datetime.strptime(as_of, "%Y-%m-%d")
+             - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+    obs = _fred_observations(series_id, as_of=as_of, start=start, end=as_of)
+    if not obs:
+        return None
+    latest_v = float(obs[-1]["value"])
+    first_v = float(obs[0]["value"])
+    return latest_v, round(latest_v - first_v, 4), obs[-1]["date"]
+
+
 @dataclass
 class MacroSnapshot:
     """Inflation / unemployment / fed funds as known on a given date, with the
@@ -122,6 +147,7 @@ class MacroSnapshot:
     unemployment_ref_month: str
     as_of: str
     source: str
+    inflation_expectations: float | None = None  # real, from 5y breakeven (T5YIE)
     signals: dict = field(default_factory=dict)
 
 
@@ -146,6 +172,12 @@ def official_snapshot(as_of: str) -> MacroSnapshot:
     if infl is None:
         raise RuntimeError(f"could not compute core-PCE YoY as of {as_of}")
 
+    # Real, market-based inflation expectations: the 5-year TIPS breakeven as it
+    # stood on the decision date (daily, never revised) -- replaces the old
+    # 0.5*inflation+0.5*anchor placeholder.
+    be = _fred_latest_asof("T5YIE", as_of)
+    expectations = be[1] if be else None
+
     return MacroSnapshot(
         inflation=infl,
         unemployment=unemp_latest[1],
@@ -154,6 +186,7 @@ def official_snapshot(as_of: str) -> MacroSnapshot:
         unemployment_ref_month=unemp_latest[0],
         as_of=as_of,
         source="official (ALFRED vintage)",
+        inflation_expectations=expectations,
     )
 
 
@@ -175,12 +208,89 @@ def realized_truth(ref_month: str) -> dict:
     unemp_v = next((float(o["value"]) for o in unemp if o["date"] >= ref_month), _latest_value(unemp)[1] if unemp else None)
     ffr_v = next((float(o["value"]) for o in ffr if o["date"] >= ref_month), _latest_value(ffr)[1] if ffr else None)
 
+    # Realized expectations: 5y breakeven for the same month (latest vintage).
+    be = _fred_observations("T5YIE", start=ref_month, end=end)
+    exp_v = _latest_value(be)[1] if be else None
+
     return {
         "ref_month": ref_month,
         "inflation": infl,
         "unemployment": unemp_v,
         "fed_funds": ffr_v,
+        "inflation_expectations": exp_v,
     }
+
+
+# ----------------------------------------------------------------------------
+# The broader official dashboard (what a real reaction function watches) and
+# the LEADING real-time signal set (the fix for the endogenous yield curve).
+# ----------------------------------------------------------------------------
+
+# Series the official committee should see (lagged/revised, like the core three).
+# id -> (label, kind) where kind hints at how to read it.
+DASHBOARD_SERIES = {
+    "PAYEMS": ("nonfarm payrolls (000s)", "level"),
+    "JTSJOL": ("job openings, JOLTS (000s)", "level"),
+    "JTSQUR": ("quits rate, JOLTS (%)", "level"),
+    "CIVPART": ("labor force participation (%)", "level"),
+    "LNS12300060": ("prime-age employment-pop ratio (%)", "level"),
+    "CES0500000003": ("avg hourly earnings ($)", "level"),
+    "RSAFS": ("retail sales ($M)", "level"),
+    "INDPRO": ("industrial production (index)", "level"),
+    "GDPNOW": ("Atlanta Fed GDPNow (%, annualized)", "level"),
+    "WRESBAL": ("bank reserves ($M)", "level"),
+    "RRPONTSYD": ("overnight reverse repo ($B)", "level"),
+    "WALCL": ("Fed total assets ($M)", "level"),
+}
+
+# Genuinely LEADING / real-time signals: high-frequency, little or no revision,
+# and -- unlike the Treasury curve -- not just a mirror of expected Fed policy.
+# id -> (label, window_days, momentum_matters)
+LEADING_SERIES = {
+    "ICSA": ("initial jobless claims (weekly)", 35, True),
+    "IHLIDXUS": ("Indeed job postings index", 45, True),
+    "BAMLH0A0HYM2": ("high-yield credit spread (OAS, %)", 14, True),
+    "BAMLC0A0CM": ("investment-grade credit spread (OAS, %)", 14, True),
+    "VIXCLS": ("equity volatility (VIX)", 14, True),
+    "DTWEXBGS": ("broad trade-weighted US dollar", 21, True),
+    "DCOILWTICO": ("WTI crude oil ($/bbl)", 14, True),
+    "DHHNGSP": ("Henry Hub natural gas ($/MMBtu)", 14, True),
+    "MICH": ("UMich 1y inflation expectations (%)", 60, False),
+    "T5YIFR": ("5y5y forward inflation breakeven (%)", 14, True),
+}
+
+
+def official_dashboard(as_of: str) -> dict:
+    """The broader lagged/official picture as known on as_of (vintage-aware)."""
+    out = {}
+    for sid, (label, _kind) in DASHBOARD_SERIES.items():
+        try:
+            lv = _fred_latest_asof(sid, as_of, lookback_days=500)
+            out[sid] = {"label": label, "date": lv[0], "value": lv[1]} if lv else None
+        except Exception:
+            out[sid] = None
+    return out
+
+
+def leading_signals(as_of: str) -> dict:
+    """
+    SWAP POINT 3, done right: the real-time LEADING signal set. High-frequency,
+    barely-revised series that move ahead of the official macro prints and are
+    largely exogenous to the Fed's own policy path -- the opposite of the
+    Treasury curve, which embeds the market's forecast of Fed policy itself.
+    """
+    out = {"as_of": as_of}
+    for sid, (label, window, _mom) in LEADING_SERIES.items():
+        try:
+            ch = _fred_change_asof(sid, as_of, lookback_days=window)
+            if ch:
+                out[sid] = {"label": label, "value": ch[0],
+                            "change": ch[1], "date": ch[2], "window_days": window}
+            else:
+                out[sid] = None
+        except Exception:
+            out[sid] = None
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -227,6 +337,67 @@ def realtime_signals(as_of: str) -> dict:
         "change_10y_10d": _chg("year10"),  # long-end momentum over the window
         "window_start": oldest.get("date"),
     }
+
+
+# ----------------------------------------------------------------------------
+# FMP leverage: things FRED cannot do. (1) same-day / intraday market quotes for
+# the LIVE tool; (2) the economic calendar with consensus, so the committee can
+# react to data SURPRISES (actual vs expected) -- a real, non-circular signal.
+# ----------------------------------------------------------------------------
+_FMP_MARKETS = {
+    "DX=F": "broad US dollar index (DXY)",
+    "CLUSD": "WTI crude oil",
+    "^VIX": "equity volatility (VIX)",
+    "HYG": "high-yield credit ETF",
+    "LQD": "investment-grade credit ETF",
+}
+
+
+def live_market_signals() -> dict:
+    """
+    Real-time market quotes from FMP for the LIVE tool (intraday, fresher than
+    FRED's end-of-day). NOT historical: /quote returns the current price, so this
+    is for live decisions, not backtests (which use the FRED vintage path).
+    """
+    key = _fmp_key()
+    out = {}
+    for sym, label in _FMP_MARKETS.items():
+        try:
+            r = requests.get(f"{FMP_BASE}/quote", params={"symbol": sym, "apikey": key},
+                             timeout=20)
+            rows = r.json() if r.ok else []
+            if rows:
+                q = rows[0]
+                out[sym] = {"label": label, "price": q.get("price"),
+                            "change_pct": q.get("changePercentage")}
+            else:
+                out[sym] = None
+        except Exception:
+            out[sym] = None
+    return out
+
+
+def economic_surprises(frm: str, to: str, country: str = "US") -> list[dict]:
+    """
+    US releases between two dates with consensus vs actual, from the FMP economic
+    calendar. surprise = actual - estimate is a genuinely leading, non-circular
+    signal (unlike the Treasury curve). Release dates also pin no-look-ahead.
+    """
+    key = _fmp_key()
+    r = requests.get(f"{FMP_BASE}/economic-calendar",
+                     params={"from": frm, "to": to, "apikey": key}, timeout=30)
+    r.raise_for_status()
+    out = []
+    for ev in r.json():
+        if ev.get("country") not in (country, "USD", "United States"):
+            continue
+        actual, est = ev.get("actual"), ev.get("estimate")
+        surprise = None
+        if isinstance(actual, (int, float)) and isinstance(est, (int, float)):
+            surprise = round(actual - est, 4)
+        out.append({"date": ev.get("date"), "event": ev.get("event"),
+                    "estimate": est, "actual": actual, "surprise": surprise})
+    return out
 
 
 if __name__ == "__main__":

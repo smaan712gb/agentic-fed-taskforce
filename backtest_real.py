@@ -44,7 +44,15 @@ config.init()
 
 from objective import EconomyState, PolicyDecision, score
 from committee import run_committee, select_backend
-from data_real import official_snapshot, realtime_signals, realized_truth
+from data_real import (
+    official_snapshot, realtime_signals, realized_truth, leading_signals,
+)
+
+# Which real-time signal the FRESH committee gets:
+#   "leading" = jobless claims, job postings, credit spreads, dollar, oil, VIX
+#               (high-frequency, leading, largely exogenous to the Fed path)
+#   "curve"   = the original Treasury yield curve (endogenous; the pilot's signal)
+SIGNAL_MODE = os.environ.get("FED_SIGNAL_MODE", "leading")
 
 # Real FOMC decision dates spanning the recent hike -> hold -> cut arc.
 DEFAULT_DATES = [
@@ -67,7 +75,8 @@ def stale_state(snap) -> EconomyState:
         inflation=snap.inflation,
         unemployment=snap.unemployment,
         policy_rate=snap.fed_funds,  # the Fed knows its own rate exactly
-        inflation_expectations=_expectations(snap.inflation),
+        # Real market-based expectations (5y breakeven); fall back only if absent.
+        inflation_expectations=snap.inflation_expectations or _expectations(snap.inflation),
     )
 
 
@@ -77,34 +86,55 @@ def truth_state(truth: dict) -> EconomyState:
         inflation=truth["inflation"],
         unemployment=truth["unemployment"],
         policy_rate=truth["fed_funds"],
-        inflation_expectations=_expectations(truth["inflation"]),
+        inflation_expectations=truth.get("inflation_expectations") or _expectations(truth["inflation"]),
     )
 
 
-def signals_text(sig: dict) -> str:
+def curve_signals_text(sig: dict) -> str:
+    """The original (endogenous) Treasury-curve signal. Kept for A/B comparison."""
     if not sig.get("available"):
         return "Real-time market data is unavailable for this date."
     yc = sig["yield_curve"]
     spread = sig["term_spread_10y_3m"]
-    shape = (
-        "inverted (10y below 3m)" if spread is not None and spread < 0
-        else "upward-sloping"
-    )
+    shape = "inverted (10y below 3m)" if spread is not None and spread < 0 else "upward-sloping"
 
-    def _mv(x, suffix=" pp"):
-        return "n/a" if x is None else f"{x:+}{suffix}"
+    def _mv(x):
+        return "n/a" if x is None else f"{x:+} pp"
 
     return (
         f"As of {sig['curve_date']}, the Treasury yield curve was: "
         f"3-month {yc['month3']}%, 2-year {yc['year2']}%, 10-year {yc['year10']}%, "
         f"30-year {yc['year30']}%. The 10-year minus 3-month term spread was "
-        f"{spread} percentage points -- {shape}. "
-        f"Over the prior ~10 trading days the 3-month moved {_mv(sig.get('change_3m_10d'))} "
-        f"and the 10-year moved {_mv(sig.get('change_10y_10d'))}. "
-        f"These market rates are real-time and never revised. Weigh them as one "
-        f"input alongside the official data, applying your own judgment about how "
-        f"much they should move the decision in the current regime."
+        f"{spread} percentage points -- {shape}. Over the prior ~10 trading days "
+        f"the 3-month moved {_mv(sig.get('change_3m_10d'))} and the 10-year moved "
+        f"{_mv(sig.get('change_10y_10d'))}. Weigh as one input, applying your own "
+        f"judgment about how much it should move the decision in the current regime."
     )
+
+
+def leading_signals_text(ls: dict) -> str:
+    """Format the leading/exogenous signal set (the fixed edge)."""
+    lines = [
+        "Real-time leading indicators available now. These are high-frequency, "
+        "barely revised, and move BEFORE the official prints -- and unlike the "
+        "Treasury curve they are not just the market's forecast of your own next "
+        "move. Weigh them with your own judgment:"
+    ]
+    for sid, v in ls.items():
+        if sid == "as_of" or not v:
+            continue
+        chg = f" (change {v['change']:+} over ~{v['window_days']}d)" if v.get("change") is not None else ""
+        lines.append(f"  - {v['label']}: {v['value']}{chg}  [as of {v['date']}]")
+    return "\n".join(lines)
+
+
+def signal_context(date: str):
+    """Return (text, raw) for the configured signal mode."""
+    if SIGNAL_MODE == "curve":
+        raw = realtime_signals(date)
+        return curve_signals_text(raw), raw
+    raw = leading_signals(date)
+    return leading_signals_text(raw), raw
 
 
 def _committee_loss(state: EconomyState, extra_context, backend, rounds, ts):
@@ -132,7 +162,9 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
     print("=== KEYSTONE EXPERIMENT (REAL data, REAL committee) ===")
     print(f"    Backend: {backend.name}   rounds/committee: {rounds}   "
           f"runs/date: {runs_per_date}")
-    print("    Same committee; only the FRESH side also sees real-time signals.")
+    print(f"    Signal mode: {SIGNAL_MODE}  "
+          f"({'leading/exogenous indicators' if SIGNAL_MODE == 'leading' else 'Treasury yield curve (endogenous)'})")
+    print("    Same committee; only the FRESH side also sees the real-time signal.")
     print("    Multiple runs/date average out the model's run-to-run noise.\n")
     print(f"{'date':>11} {'stale loss(mean+/-sd)':>22} {'fresh loss(mean+/-sd)':>22} "
           f"{'fresh wins':>11} {'better':>7}")
@@ -144,9 +176,8 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
 
     for d in dates:
         snap = official_snapshot(d)
-        sig = realtime_signals(d)
+        sig_text, sig = signal_context(d)
         st = stale_state(snap)
-        sig_text = signals_text(sig)
 
         month = d[:7] + "-01"
         truth = realized_truth(month)
@@ -227,6 +258,7 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
 
     summary = {
         "model": backend.name, "rounds": rounds, "runs_per_date": runs_per_date,
+        "signal_mode": SIGNAL_MODE,
         "dates": n, "mean_stale": mean_s, "mean_fresh": mean_f,
         "improvement_pct": improvement,
         "by_date": date_better, "by_run": run_wins, "rows": rows,

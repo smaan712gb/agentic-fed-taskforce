@@ -29,43 +29,68 @@ committee runs **3 times per date** (n = 12 committee pairs).
 - The error bars are tight, so this is **not** noise: with this signal, the
   fresh committee is genuinely, if mildly, worse.
 
-## The honest reading
+## The honest reading (curve signal)
 
 **A naive real-time signal is not a free edge.** The damage concentrates at
 2023-07-26: the fresh committee saw the deeply inverted yield curve, read it as
 a recession warning, and eased into still-hot inflation — and got punished. The
-curve cried wolf, and the committee that trusted it underperformed.
+curve cried wolf, and the committee that trusted it underperformed. The
+structural reason: **the Treasury curve already embeds the market's forecast of
+Fed policy, so feeding it back is partly circular** — a mirror of policy
+expectations, not a leading read on the real economy.
 
-There is a deeper, structural reason, and it is the most important finding here:
+## Result (signal = leading/exogenous set)
 
-> **The Treasury yield curve is the wrong kind of signal.** It already embeds the
-> market's forecast of what the Fed will do, so feeding it back into the Fed's own
-> decision is partly circular. It is a noisy, endogenous mirror of policy
-> expectations — not a leading read on the real economy. That is very likely why
-> there was "no edge."
+So we replaced the curve with signals that genuinely lead the official data and
+are not a forecast of Fed policy — weekly jobless claims (`ICSA`), Indeed job
+postings (`IHLIDXUS`), credit spreads, the dollar, energy, and volatility — and
+re-ran the same n = 12.
 
-This is a more useful result than a manufactured win. It says the freshness
-thesis is not refuted — it was tested with the wrong instrument.
+| Date | Regime | Stale loss | Fresh loss | Winner |
+| --- | --- | ---: | ---: | --- |
+| 2023-07-26 | hiking, hot inflation | 7.38 ± 1.64 | 6.48 ± 0.19 | **fresh** (2/3) |
+| 2023-12-13 | dovish pivot | 1.84 ± 0.15 | 2.44 ± 0.00 | stale |
+| 2024-06-12 | hold | 1.45 ± 0.13 | 2.21 ± 0.49 | stale |
+| 2024-09-18 | first cut | 1.11 ± 0.02 | 1.96 ± 0.36 | stale |
 
-## What changed in response (now in the repo)
+- Mean realized loss — **stale 2.94, fresh 3.27 → fresh 11.2% *worse*** overall.
+- By date: fresh 1 / stale 3. By run: fresh 2 / stale 10.
+- **But the turning point flipped.** At 2023-07-26 — the single hardest date,
+  where the *curve* signal made the fresh committee lose — the *leading* signals
+  made it **win** (6.48 vs 7.38). The leading set read the regime correctly where
+  the curve misled.
 
-1. **Inflation expectations are now real** — the 5-year TIPS breakeven (`T5YIE`),
-   not the old `0.5*inflation + 0.5*anchor` placeholder.
-2. **The signal set is now leading and exogenous** — weekly jobless claims
-   (`ICSA`), Indeed job postings (`IHLIDXUS`), credit spreads, the dollar, oil,
-   and VIX: series that move *before* the official prints and are not chiefly a
-   forecast of Fed policy. See `DATA-SOURCES.md`.
-3. **The committee now sees a real dashboard** — labor depth, financial
-   conditions, activity, and the balance sheet — instead of three numbers.
+## The synthesis (the real finding)
+
+Two robust statements survive both runs:
+
+1. **No free edge at n = 4.** Across both signal types, a real-time-informed
+   committee does not beat the lagged-data committee on average in this small
+   pilot. Honest, and consistent with the synthetic result that freshness is
+   *insurance*, not a steady gain.
+2. **Where it helps, and what kind.** The value concentrates at the **turning
+   point** (2023-07-26) and the **signal type matters there**: leading/exogenous
+   indicators beat the endogenous curve at exactly the moment that costs the most
+   to get wrong. In calm periods, the extra signal adds noise. This is the
+   synthetic experiment's central lesson, now reproduced on real data.
+
+**Caveat (stated plainly):** the curve and leading runs are not a perfectly
+controlled A/B — the curve run used the old placeholder expectations, the leading
+run uses the real 5y-breakeven expectations and the broader dashboard. So the
+across-the-board loss levels are not directly comparable; the per-date *winner*
+and the turning-point flip are the reliable reads. A clean controlled A/B (curve
+vs. leading on identical inputs) is build-order item 5b.
 
 ## What is proven, and what is not
 
 - **Proven:** a working, transparent, reproducible, no-look-ahead path from
   real-time signal to scored policy decision, on real data, with a real agentic
-  committee — and an honest measurement that a circular signal does not help.
-- **Not proven:** that the *right* (leading, exogenous) signals deliver an edge.
-  That is the next experiment (build-order item 5 in `DATA-SOURCES.md`), now that
-  the leading-signal layer exists.
+  committee; real (not faked) inputs throughout; and an honest measurement that
+  no signal type yet delivers a steady edge — while the *right* signals win the
+  turning point.
+- **Not proven:** a steady, statistically-robust edge. That needs many more dates
+  (n = 4 is a pilot), a controlled A/B, and the `SCRAPE-FREE` signals still on the
+  build list (Cleveland Fed inflation nowcast, card-spend). See `DATA-SOURCES.md`.
 
 ## Scope and honesty
 

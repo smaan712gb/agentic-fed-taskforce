@@ -159,8 +159,11 @@ real publication lag and first-release values fall out of the query.
 3. ✅ **Broader official dashboard** (labor depth, financial conditions, activity,
    money/balance sheet) — done; un-starves the personas.
 4. ✅ **FMP surprise + live-quote helpers** — done.
-5. ⬜ **Re-run the edge experiment** with the leading set vs the old curve — the
-   real test of the audit's hypothesis.
+5. ✅ **Re-ran the edge experiment** with the leading set vs the curve — see
+   `FINDINGS.md`. Result: no steady edge at n=4, but leading signals win the
+   turning point where the curve loses.
+   - ⬜ **5b. Clean controlled A/B** — curve vs leading on identical inputs
+     (the two runs differ in expectations/dashboard; not yet a controlled test).
 6. ⬜ **Cleveland Fed inflation nowcast** (`SCRAPE-FREE`) — add the real-time
    inflation signal.
 7. ⬜ **Opportunity Insights card-spend** (`SCRAPE-FREE`) — add demand nowcast.

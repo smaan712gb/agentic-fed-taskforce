@@ -1,0 +1,24 @@
+[project]
+name = "fed-taskforce"
+version = "0.1.0"
+description = "Agentic Fed Task Force: a decision-support and red-team sandbox for the Fed's dual mandate."
+readme = "README.md"
+requires-python = ">=3.10"
+# The core sandbox (objective.py, nowcast.py, backtest.py) uses only the
+# standard library, so it runs with no third-party dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+# Installed only for development: tests now, and the libraries the real-data
+# swap (FRED/ALFRED vintages, real-time feeds) and plotting will need.
+dev = ["pytest>=8.0"]
+# The live committee (committee.py) runs frontier-model personas via the
+# Anthropic SDK. Without it (or without ANTHROPIC_API_KEY) committee.py falls
+# back to a labelled deterministic stub, so the core stays dependency-free.
+agent = ["anthropic>=0.69"]
+# The real-data layer (data_real.py, backtest_real.py): live FRED/ALFRED and FMP
+# access, plus OS-trust-store TLS so it works behind a corporate proxy.
+data = ["anthropic>=0.69", "requests>=2.31", "truststore>=0.9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

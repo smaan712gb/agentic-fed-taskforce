@@ -14,6 +14,8 @@ This repository is the wedge-first proof of one narrow, falsifiable claim: **the
 | `committee.py` | The agent layer: real frontier-model personas run one full deliberation cycle (propose, score, deliberate, red-team, decide) against `objective.py`, with a logged transcript. |
 | `data_real.py` | The real-data layer: FRED realized truth, ALFRED release-and-revision vintages, and FMP real-time financial signals — the three `# SWAP POINT`s, made live. |
 | `backtest_real.py` | The keystone experiment on **real** data with the **real** committee: stale official vintage vs. the same committee also given real-time signals, scored against realized outcomes, with multi-run averaging. |
+| `app.py` | Analyst UI: a local Streamlit app to browse the live data dashboard, the backtest scorecard, and committee deliberations — and trigger a fresh live one. |
+| `report.py` | Generates a self-contained, professional `report.html` from the run data (open in a browser; Print → PDF). The shareable leave-behind. |
 | `config.py` | Loads `.env` and trusts the OS certificate store so HTTPS works behind a corporate proxy. |
 | `DATA-SOURCES.md` | The target data dashboard: verified series IDs, what leads vs. mirrors policy, FMP/scraping/vendor tiers, and build order. |
 | `program.md` | The agentic committee charter, in the `autoresearch` style. |
@@ -79,6 +81,23 @@ uv run --extra data python backtest_real.py   # the real experiment
 
 # average out model run-to-run noise (recommended):
 FED_BACKTEST_RUNS=3 uv run --extra data python backtest_real.py
+```
+
+## For analysts: the UI and the report
+
+A local web app to explore everything — no terminal required after launch:
+
+```bash
+uv run --extra ui streamlit run app.py
+```
+
+It has four tabs: an honest **Overview**, a **Live data** dashboard (the ALFRED
+vintage and real-time signals for any date), the **Backtest scorecard**, and
+**Committee deliberation** (browse saved transcripts or run a fresh live one with
+your own key). Generate the shareable report with:
+
+```bash
+python report.py   # -> report.html (open in a browser; Print -> Save as PDF)
 ```
 
 A free FRED key is instant ([request one here](https://fred.stlouisfed.org/docs/api/api_key.html));

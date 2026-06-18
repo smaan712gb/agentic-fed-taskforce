@@ -19,6 +19,8 @@ agent = ["anthropic>=0.69"]
 # The real-data layer (data_real.py, backtest_real.py): live FRED/ALFRED and FMP
 # access, plus OS-trust-store TLS so it works behind a corporate proxy.
 data = ["anthropic>=0.69", "requests>=2.31", "truststore>=0.9"]
+# The analyst UI (app.py): a local Streamlit app. report.py needs no extra deps.
+ui = ["streamlit>=1.40", "pandas>=2.0", "anthropic>=0.69", "requests>=2.31", "truststore>=0.9"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

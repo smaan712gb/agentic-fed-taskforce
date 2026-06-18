@@ -15,6 +15,9 @@ env/
 # Run artifacts (committee transcripts)
 runs/
 
+# Generated report (regenerate with: python report.py)
+report.html
+
 # Tooling
 .pytest_cache/
 .ruff_cache/

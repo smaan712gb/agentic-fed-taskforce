@@ -28,7 +28,9 @@ This repository is the wedge-first proof of one narrow, falsifiable claim: **the
 | `backtest_real.py` | The keystone experiment on **real** data with the **real** committee: stale official vintage vs. the same committee also given real-time signals, scored against realized outcomes, with multi-run averaging. |
 | `app.py` | Analyst UI: a local Streamlit app to browse the live data dashboard, the backtest scorecard, and committee deliberations — and trigger a fresh live one. |
 | `report.py` | Generates a self-contained, professional `report.html` from the run data (open in a browser; Print → PDF). The shareable leave-behind. |
+| `sensitivity.py` | Robustness check: re-scores the saved committee/Fed decisions under perturbed structural constants (r*, u*, λ, Phillips, Okun) and reports which conclusions survive. No model calls. |
 | `config.py` | Loads `.env` and trusts the OS certificate store so HTTPS works behind a corporate proxy. |
+| `PRE-REGISTRATION.md` | The hypothesis, dates, signal set, metric, and arms — fixed before running, to remove researcher degrees of freedom. |
 | `DATA-SOURCES.md` | The target data dashboard: verified series IDs, what leads vs. mirrors policy, FMP/scraping/vendor tiers, and build order. |
 | `program.md` | The agentic committee charter, in the `autoresearch` style. |
 | `Agentic-Fed-Taskforce-Blueprint.md` | The full design, architecture, and build strategy. |

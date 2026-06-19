@@ -30,19 +30,21 @@ improve decisions?*
   information set — and scores both committees against what the economy actually
   did, averaging over runs to remove model noise.
 
-**The honest finding.** On real FOMC dates, the first signal tested — the
-Treasury yield curve — gave **no edge** (the fresh committee was ~6.5% worse),
-because the curve embeds the market's forecast of Fed policy and is therefore
-partly circular. Replacing it with **leading, exogenous** indicators (weekly
-jobless claims, job postings, credit spreads, the dollar, energy, volatility)
-also showed no across-the-board edge in this 4-date pilot (~11% worse on
-average) — **but the turning point flipped**: at the single hardest date
-(July 2023, hot inflation), where the curve had made the fresh committee lose,
-the leading indicators made it *win*. The robust, honest read: real-time data is
-**insurance that pays off at turning points**, not a steady gain — and the *kind*
-of signal matters most exactly when it matters most. This is the synthetic
-experiment's lesson, reproduced on real data. Four dates is a pilot, not a
-verdict; a larger, controlled study is the next step (`DATA-SOURCES.md`).
+**The honest finding (pre-registered, n = 10, robustness-checked).** Across ten
+real FOMC dates spanning aggressive hiking, the SVB stress, the hold, the pivot,
+and the first cuts, giving the committee a real-time leading-indicator signal set
+(jobless claims, job postings, credit spreads, the dollar, energy, volatility) on
+top of the lagged official data **did not help** — it was **16% worse** on
+average, with the damage concentrated in the volatile 2022 hiking phase. That
+result is robust: it holds across the full plausible range of the model's
+structural constants (r\*, u\*, the Phillips and Okun slopes, the employment
+weight) — not a calibration artifact. An earlier four-date hint that real-time
+signals win at turning points **did not replicate and is retracted**. Both
+committees score better than the Fed's actual path under our objective on every
+date, but that is a **model-internal** ranking (the objective rewards faster
+normalization than the Fed chose), **not** a real-world claim. The robust, honest
+read: *simply showing a committee more real-time data does not improve policy when
+the reasoning is held fixed* — and we report that straight.
 
 **What the numbers are — read this.** The objective *re-simulates* each rate path
 from the realized state; it does **not** observe post-decision macro outcomes. So

@@ -197,13 +197,19 @@ Dates and signals are pre-registered.
 </div>
 
 <h2>The honest finding</h2>
-<p>On real FOMC dates, real-time signals show <b>no steady edge</b> at this small
-sample. But at the <b>turning point</b> (July 2023, hot inflation), leading
-indicators — jobless claims, job postings, credit spreads — made the fresh
-committee <b>win</b>, where the endogenous Treasury yield curve had made it
-<b>lose</b>. The robust read: real-time data is <b>insurance at turning points,
-not a free gain</b>, and the <i>kind</i> of signal matters most exactly when it
-matters most. Four dates is a pilot, not a verdict.</p>
+<p>Across <b>ten pre-registered</b> real FOMC dates (aggressive hiking, the SVB
+stress, the hold, the pivot, the first cuts), giving the committee a real-time
+leading-indicator signal set on top of the lagged official data <b>did not
+help</b> — it was <b>16% worse</b> on average, with the damage concentrated in
+the volatile 2022 hiking phase. The result is <b>robust</b>: it holds across the
+full plausible range of the model's structural constants (r*, u*, Phillips, Okun,
+the employment weight), so it is not a calibration artifact. An earlier four-date
+hint that real-time signals win at turning points <b>did not replicate and is
+retracted</b>. The honest read: <i>simply showing a committee more real-time data
+does not improve policy when the reasoning is held fixed.</i> Both committees
+score better than the Fed's actual path under our objective, but that is a
+model-internal ranking (the objective rewards faster normalization than the Fed
+chose), <b>not</b> a real-world claim.</p>
 
 <h2>Backtest scorecard (real data, real committee, no look-ahead)</h2>
 {('<div>' + _chart_svg(leading) + '</div>') if leading else ''}

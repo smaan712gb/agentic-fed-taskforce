@@ -46,6 +46,7 @@ from objective import EconomyState, PolicyDecision, score
 from committee import run_committee, select_backend
 from data_real import (
     official_snapshot, realtime_signals, realized_truth, leading_signals,
+    fed_actual_path,
 )
 
 # Which real-time signal the FRESH committee gets:
@@ -54,11 +55,19 @@ from data_real import (
 #   "curve"   = the original Treasury yield curve (endogenous; the pilot's signal)
 SIGNAL_MODE = os.environ.get("FED_SIGNAL_MODE", "leading")
 
-# Real FOMC decision dates spanning the recent hike -> hold -> cut arc.
+# Pre-registered FOMC decision dates (see PRE-REGISTRATION.md), chosen to span
+# regimes -- aggressive hiking, banking stress, the hold, the pivot, the cuts --
+# BEFORE looking at results, to remove date-cherry-picking degrees of freedom.
 DEFAULT_DATES = [
+    "2022-06-15",  # +75bp, peak hawkish surprise
+    "2022-09-21",  # mid hiking cycle
+    "2022-12-14",  # hiking pace slows
+    "2023-03-22",  # banking stress (SVB) meeting
     "2023-07-26",  # final hike of the cycle
-    "2023-12-13",  # the dovish pivot meeting
-    "2024-06-12",  # extended hold, deeply inverted curve
+    "2023-09-20",  # extended hold begins
+    "2023-12-13",  # the dovish pivot
+    "2024-03-20",  # hold, sticky inflation
+    "2024-06-12",  # hold, deeply inverted curve
     "2024-09-18",  # first cut
 ]
 
@@ -164,15 +173,19 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
           f"runs/date: {runs_per_date}")
     print(f"    Signal mode: {SIGNAL_MODE}  "
           f"({'leading/exogenous indicators' if SIGNAL_MODE == 'leading' else 'Treasury yield curve (endogenous)'})")
-    print("    Same committee; only the FRESH side also sees the real-time signal.")
-    print("    Multiple runs/date average out the model's run-to-run noise.\n")
-    print(f"{'date':>11} {'stale loss(mean+/-sd)':>22} {'fresh loss(mean+/-sd)':>22} "
-          f"{'fresh wins':>11} {'better':>7}")
+    print("    Three arms: STALE committee, FRESH committee, and the FED's actual")
+    print("    realized funds-rate path -- all scored by the same objective.")
+    print("    CAVEAT: the objective re-simulates each path from the realized")
+    print("    state; it does NOT observe post-decision macro. This is a")
+    print("    model-internal ranking, not a measurement of real outcomes.\n")
+    print(f"{'date':>11} {'stale':>9} {'fresh':>9} {'FED':>9} {'best':>8}")
 
     rows = []
-    date_means_s, date_means_f = [], []
+    date_means_s, date_means_f, fed_losses = [], [], []
     run_wins = {"fresh": 0, "stale": 0, "tie": 0}  # across every date x run
     date_better = {"fresh": 0, "stale": 0, "tie": 0}  # by per-date mean
+    best_arm = {"stale": 0, "fresh": 0, "fed": 0}  # which of the 3 wins per date
+    beats_fed = {"stale": 0, "fresh": 0}  # committees that beat the Fed, by date
 
     for d in dates:
         snap = official_snapshot(d)
@@ -205,6 +218,11 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
                 "fresh": {"path": fp, "loss": fl, "statement": fstmt},
             })
 
+        # Fed-actual benchmark: what the FOMC actually did, scored identically.
+        fed_path = fed_actual_path(d)
+        fed_loss = score(ts, PolicyDecision(rate_path=fed_path))["total_loss"]
+        fed_losses.append(fed_loss)
+
         m_s, m_f = _mean(s_losses), _mean(f_losses)
         date_means_s.append(m_s)
         date_means_f.append(m_f)
@@ -215,6 +233,15 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
         else:
             db = "stale"
         date_better[db] += 1
+
+        # Three-way: which arm had the lowest realized loss this date.
+        arms = {"stale": m_s, "fresh": m_f, "fed": fed_loss}
+        winner = min(arms, key=arms.get)
+        best_arm[winner] += 1
+        if m_s < fed_loss:
+            beats_fed["stale"] += 1
+        if m_f < fed_loss:
+            beats_fed["fresh"] += 1
 
         rows.append({
             "date": d,
@@ -227,13 +254,12 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
             "realized_truth": truth,
             "stale_loss_mean": m_s, "stale_loss_sd": _stdev(s_losses),
             "fresh_loss_mean": m_f, "fresh_loss_sd": _stdev(f_losses),
+            "fed_actual_path": fed_path, "fed_loss": fed_loss,
             "fresh_wins_of_runs": f"{fresh_run_wins}/{runs_per_date}",
-            "better_by_mean": db,
+            "better_by_mean": db, "best_of_three": winner,
             "runs": run_detail,
         })
-        print(f"{d:>11} {f'{m_s:.3f} +/- {_stdev(s_losses):.3f}':>22} "
-              f"{f'{m_f:.3f} +/- {_stdev(f_losses):.3f}':>22} "
-              f"{f'{fresh_run_wins}/{runs_per_date}':>11} {db:>7}")
+        print(f"{d:>11} {m_s:>9.3f} {m_f:>9.3f} {fed_loss:>9.3f} {winner:>8}")
 
     n = len(date_means_s)
     if n == 0:
@@ -242,6 +268,7 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
 
     mean_s = _mean(date_means_s)
     mean_f = _mean(date_means_f)
+    mean_fed = _mean(fed_losses)
     improvement = (mean_s - mean_f) / mean_s * 100 if mean_s else 0.0
     total_runs = sum(run_wins.values())
 
@@ -249,19 +276,25 @@ def run(dates: list[str], rounds: int = 1, runs_per_date: int = 1) -> dict:
     print(f"  dates scored                : {n}   (x{runs_per_date} runs = {total_runs} committee pairs)")
     print(f"  mean realized loss, STALE   : {mean_s:.3f}")
     print(f"  mean realized loss, FRESH   : {mean_f:.3f}")
+    print(f"  mean realized loss, FED     : {mean_fed:.3f}   <- the human benchmark")
     print(f"  edge from real-time signals : {improvement:+.1f}%  (positive = fresh better)")
+    print(f"  best of three (s/f/fed)     : {best_arm['stale']}/{best_arm['fresh']}/{best_arm['fed']}")
+    print(f"  committee beats Fed (by date): stale {beats_fed['stale']}/{n}, fresh {beats_fed['fresh']}/{n}")
     print(f"  by-date (mean) fresh/stale/tie : {date_better['fresh']}/{date_better['stale']}/{date_better['tie']}")
-    print(f"  by-run        fresh/stale/tie : {run_wins['fresh']}/{run_wins['stale']}/{run_wins['tie']}")
     print("\n  Real data, real committee, run-to-run noise averaged out.")
-    print("  Still a pilot: few dates, one signal family. Read the regime story,")
-    print("  not just the headline number.")
+    print("  CAVEAT (read this): the objective re-simulates each path from the")
+    print("  realized state -- it is a model-internal ranking, NOT a measurement of")
+    print("  post-decision macro outcomes. Treat as an illustrative pilot.")
 
     summary = {
         "model": backend.name, "rounds": rounds, "runs_per_date": runs_per_date,
         "signal_mode": SIGNAL_MODE,
-        "dates": n, "mean_stale": mean_s, "mean_fresh": mean_f,
+        "dates": n, "mean_stale": mean_s, "mean_fresh": mean_f, "mean_fed": mean_fed,
         "improvement_pct": improvement,
+        "best_of_three": best_arm, "beats_fed": beats_fed,
         "by_date": date_better, "by_run": run_wins, "rows": rows,
+        "caveat": "model-internal ranking; objective re-simulates from realized "
+                  "state and does not observe post-decision macro outcomes.",
     }
     runs = Path(__file__).parent / "runs"
     runs.mkdir(exist_ok=True)

@@ -4,6 +4,18 @@ A decision-support and red-team sandbox for the Federal Reserve's dual mandate, 
 
 This repository is the wedge-first proof of one narrow, falsifiable claim: **the Fed decides on stale data, and being current would change and improve decisions.**
 
+> **Independence disclaimer.** This is an independent, unsolicited research project.
+> It is **not** affiliated with, sponsored by, or endorsed by the Federal Reserve
+> System or any of its components. "Agentic Fed Task Force" is a descriptive
+> project name, not an official designation. It is decision-support and a
+> red-team — not a replacement for the FOMC and not a claim to out-decide it.
+>
+> **What the numbers are.** The objective re-simulates each rate path from the
+> realized economic state; it does **not** observe what actually happened to
+> inflation and employment after a decision. Every result here is a
+> **model-internal ranking on an illustrative pilot**, not a measurement of real
+> outcomes. See [`FINDINGS.md`](FINDINGS.md) and [`PRE-REGISTRATION.md`](PRE-REGISTRATION.md).
+
 ## What is here
 
 | File | Role |

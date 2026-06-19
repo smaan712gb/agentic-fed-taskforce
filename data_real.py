@@ -221,6 +221,38 @@ def realized_truth(ref_month: str) -> dict:
     }
 
 
+def _add_months(d: datetime, n: int) -> datetime:
+    m = d.month - 1 + n
+    return d.replace(year=d.year + m // 12, month=m % 12 + 1, day=1)
+
+
+def fed_actual_path(decision_date: str, horizon: int = 4, step_months: int = 3) -> list[float]:
+    """
+    The Fed's ACTUAL realized funds-rate path over the `horizon` quarters after
+    the decision date (effective fed funds, latest vintage). This is the
+    human-committee benchmark: what the FOMC actually did, scored by the same
+    objective as the agentic committees. The funds rate the Fed set is observed,
+    not modeled.
+    """
+    base = datetime.strptime(decision_date, "%Y-%m-%d").replace(day=1)
+    end = _add_months(base, horizon * step_months + 2).strftime("%Y-%m-%d")
+    obs = _fred_observations("FEDFUNDS", start=base.strftime("%Y-%m-%d"), end=end)
+    by_month = {o["date"][:7]: float(o["value"]) for o in obs}
+    if not by_month:
+        raise RuntimeError(f"no fed funds data for {decision_date}")
+
+    path = []
+    for q in range(horizon):
+        target = _add_months(base, q * step_months)
+        key = target.strftime("%Y-%m")
+        if key in by_month:
+            path.append(round(by_month[key], 3))
+        else:  # nearest available month at or before the target
+            earlier = [m for m in by_month if m <= key]
+            path.append(round(by_month[max(earlier)], 3) if earlier else path[-1])
+    return path
+
+
 # ----------------------------------------------------------------------------
 # The broader official dashboard (what a real reaction function watches) and
 # the LEADING real-time signal set (the fix for the endogenous yield curve).
@@ -314,8 +346,11 @@ def realtime_signals(as_of: str) -> dict:
     rows = r.json()
     if not rows:
         return {"as_of": as_of, "available": False}
-    latest = rows[0]  # FMP returns newest-first
-    oldest = rows[-1]
+    # Sort by date explicitly so a feed reordering cannot silently flip the
+    # signal (do not assume FMP returns newest-first).
+    rows = sorted(rows, key=lambda x: x.get("date", ""))
+    latest = rows[-1]
+    oldest = rows[0]
     curve = {k: latest.get(k) for k in ("month3", "year2", "year10", "year30")}
     slope = None
     if latest.get("year10") is not None and latest.get("month3") is not None:

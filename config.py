@@ -105,8 +105,10 @@ if __name__ == "__main__":
     fmp = os.environ.get("FMP_API_KEY")
     if fmp:
         try:
+            # Exercise the SAME endpoint data_real.py uses (the current "stable"
+            # API), not the retired v3 path.
             r = requests.get(
-                "https://financialmodelingprep.com/api/v3/treasury",
+                "https://financialmodelingprep.com/stable/treasury-rates",
                 params={"from": "2024-01-02", "to": "2024-01-05", "apikey": fmp},
                 timeout=20,
             )

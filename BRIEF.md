@@ -1,5 +1,8 @@
 # Agentic Fed Task Force — one-page brief
 
+> **Independent and unsolicited.** Not affiliated with, sponsored by, or endorsed
+> by the Federal Reserve. The name is descriptive, not official.
+
 **What it is.** A working, fully transparent decision-support and red-team system
 that mirrors the structure of the five task forces announced June 17, 2026. It is
 **not** a replacement for the FOMC and makes no claim to beat it. It is a tool the
@@ -41,13 +44,23 @@ of signal matters most exactly when it matters most. This is the synthetic
 experiment's lesson, reproduced on real data. Four dates is a pilot, not a
 verdict; a larger, controlled study is the next step (`DATA-SOURCES.md`).
 
+**What the numbers are — read this.** The objective *re-simulates* each rate path
+from the realized state; it does **not** observe post-decision macro outcomes. So
+results are a **model-internal ranking on an illustrative pilot**, not a
+measurement of reality. The experiment includes the Fed's actual decision as a
+third arm for an apples-to-apples comparison, but a committee "beating the Fed" in
+this metric reflects the objective's own neutral-rate calibration — it is **not**
+evidence the committee would do better in the real economy. Dates and signals are
+**pre-registered** (`PRE-REGISTRATION.md`).
+
 **Why this is credible rather than a demo.** Every data series is verified live;
 no inputs are faked (inflation expectations use real TIPS breakevens, not a
 formula); no-look-ahead is structural, not promised; the metric is fixed and
-public; and the result is reported honestly, including when the signal does not
-help. The full target data dashboard — with exact series IDs, what leads vs.
-mirrors policy, and an honest free/paid tiering — is specified in
-`DATA-SOURCES.md`.
+public; the backend model is **swappable** (the committee runs on Claude today,
+but the runtime is an interface, not a dependency); and results are reported
+honestly, including when the signal does not help. The full target data dashboard
+— exact series IDs, what leads vs. mirrors policy, an honest free/paid tiering —
+is in `DATA-SOURCES.md`.
 
 **Fit with the five task forces.** The dual-mandate engine is the core (monetary
 policy operations). The same charter-plus-metric pattern extends to the other

@@ -54,28 +54,72 @@ def _scorecard_html(d: dict, title: str) -> str:
     if not d:
         return ""
     bd = d.get("by_date", {})
+    has_fed = any("fed_loss" in r for r in d.get("rows", []))
     rows = "".join(
         f"<tr><td>{html.escape(r['date'])}</td>"
         f"<td>{r['stale_loss_mean']:.3f}</td>"
         f"<td>{r['fresh_loss_mean']:.3f}</td>"
-        f"<td class='{ 'win' if r['better_by_mean']=='fresh' else 'lose' }'>{r['better_by_mean']}</td>"
-        f"<td>{html.escape(str(r.get('fresh_wins_of_runs','')))}</td></tr>"
+        + (f"<td>{r.get('fed_loss', float('nan')):.3f}</td>" if has_fed else "")
+        + f"<td class='{ 'win' if r.get('best_of_three', r['better_by_mean']) in ('fresh','stale') and r['fresh_loss_mean']<r['stale_loss_mean'] else '' }'>"
+        f"{html.escape(str(r.get('best_of_three', r['better_by_mean'])))}</td></tr>"
         for r in d.get("rows", [])
     )
     edge = d.get("improvement_pct", 0)
     edge_cls = "win" if edge > 0 else "lose"
+    fed_metric = (f'<div class="metric"><div class="v">{d["mean_fed"]:.3f}</div>'
+                  f'<div class="l">mean loss — Fed actual</div></div>') if "mean_fed" in d else ""
+    fed_head = "<th>Fed actual</th>" if has_fed else ""
     return f"""
     <h3>{html.escape(title)} <span class="muted">(signal mode: {html.escape(d.get('signal_mode','?'))}, {d.get('runs_per_date')} runs/date)</span></h3>
     <div class="metrics">
       <div class="metric"><div class="v">{d['mean_stale']:.3f}</div><div class="l">mean loss — stale</div></div>
       <div class="metric"><div class="v">{d['mean_fresh']:.3f}</div><div class="l">mean loss — fresh</div></div>
-      <div class="metric"><div class="v {edge_cls}">{edge:+.1f}%</div><div class="l">edge from signals</div></div>
-      <div class="metric"><div class="v">{bd.get('fresh',0)}/{bd.get('stale',0)}/{bd.get('tie',0)}</div><div class="l">by-date fresh/stale/tie</div></div>
+      {fed_metric}
+      <div class="metric"><div class="v {edge_cls}">{edge:+.1f}%</div><div class="l">fresh vs stale edge</div></div>
     </div>
     <table>
-      <thead><tr><th>FOMC date</th><th>stale loss</th><th>fresh loss</th><th>winner</th><th>fresh wins of runs</th></tr></thead>
+      <thead><tr><th>FOMC date</th><th>stale</th><th>fresh</th>{fed_head}<th>best of three</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>"""
+
+
+def _chart_svg(d: dict) -> str:
+    """Grouped bar chart (inline SVG): stale vs fresh vs Fed realized loss by date."""
+    if not d or not d.get("rows"):
+        return ""
+    rows = d["rows"]
+    W, H, ml, mr, mt, mb = 840, 300, 46, 14, 24, 74
+    pw, ph = W - ml - mr, H - mt - mb
+    maxv = max(max(r["stale_loss_mean"], r["fresh_loss_mean"], r.get("fed_loss", 0))
+               for r in rows) or 1.0
+    n = len(rows)
+    gw = pw / n
+    bw = gw * 0.24
+    cols = {"stale": "#9aa3af", "fresh": "#1f3a5f", "fed": "#b4232b"}
+
+    def y(v):
+        return mt + ph - (v / maxv * ph)
+
+    parts = [f'<line x1="{ml}" y1="{mt+ph}" x2="{W-mr}" y2="{mt+ph}" stroke="#c9ced6"/>']
+    for i, r in enumerate(rows):
+        gx = ml + i * gw
+        for j, (k, v) in enumerate([("stale", r["stale_loss_mean"]),
+                                    ("fresh", r["fresh_loss_mean"]),
+                                    ("fed", r.get("fed_loss", 0))]):
+            x = gx + gw * 0.12 + j * bw
+            parts.append(f'<rect x="{x:.1f}" y="{y(v):.1f}" width="{bw*0.92:.1f}" '
+                         f'height="{mt+ph-y(v):.1f}" fill="{cols[k]}"/>')
+        cx = gx + gw / 2
+        parts.append(f'<text x="{cx:.1f}" y="{mt+ph+14}" font-size="10" '
+                     f'text-anchor="end" transform="rotate(-38 {cx:.1f} {mt+ph+14})">{r["date"]}</text>')
+    lx = ml + 6
+    for k, lab in [("stale", "stale committee"), ("fresh", "fresh committee"), ("fed", "Fed actual")]:
+        parts.append(f'<rect x="{lx}" y="6" width="11" height="11" fill="{cols[k]}"/>'
+                     f'<text x="{lx+15}" y="15" font-size="11">{lab}</text>')
+        lx += 130
+    parts.append(f'<text x="6" y="{mt+ph/2}" font-size="10" fill="#6b7280" '
+                 f'transform="rotate(-90 12 {mt+ph/2})">realized loss (lower better)</text>')
+    return f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" aria-label="loss by date">{"".join(parts)}</svg>'
 
 
 def _committee_html(d: dict) -> str:
@@ -143,11 +187,13 @@ def build() -> Path:
 <p class="sub">A transparent decision-support &amp; red-team system for the dual mandate · generated {now}</p>
 
 <div class="callout">
-<b>What this is.</b> A working, reproducible tool that treats the dual mandate as
-a loss function, lets a logged and adversarially-tested committee of model
-personas propose and defend rate paths, and scores every decision against real
-outcomes with no look-ahead. It is decision-support and a red-team — <b>not</b> a
-replacement for the FOMC and not a claim to beat it.
+<b>Independent &amp; unsolicited.</b> Not affiliated with, sponsored by, or endorsed
+by the Federal Reserve; the name is descriptive, not official. It is
+decision-support and a red-team — <b>not</b> a replacement for the FOMC and not a
+claim to beat it. <b>What the numbers are:</b> the objective re-simulates each
+path from the realized state and does <b>not</b> observe post-decision macro — a
+model-internal ranking on an illustrative pilot, not a measurement of reality.
+Dates and signals are pre-registered.
 </div>
 
 <h2>The honest finding</h2>
@@ -160,6 +206,7 @@ not a free gain</b>, and the <i>kind</i> of signal matters most exactly when it
 matters most. Four dates is a pilot, not a verdict.</p>
 
 <h2>Backtest scorecard (real data, real committee, no look-ahead)</h2>
+{('<div>' + _chart_svg(leading) + '</div>') if leading else ''}
 {_scorecard_html(leading, "Leading / exogenous signal set") or "<p class='muted'>No leading-mode run found.</p>"}
 {_scorecard_html(curve, "Treasury yield curve (endogenous — for comparison)")}
 <p class="muted">Note: the curve and leading runs are not a perfectly controlled

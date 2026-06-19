@@ -128,8 +128,12 @@ st.sidebar.markdown("**Backends**")
 st.sidebar.write("Committee model:", "Claude Opus 4.8" if _have("ANTHROPIC_API_KEY") else "stub (no key)")
 st.sidebar.write("FRED / ALFRED:", "ready" if _have("FRED_API_KEY") else "missing key")
 st.sidebar.write("FMP signals:", "ready" if _have("FMP_API_KEY") else "missing key")
-st.sidebar.info("This is decision-support and a red-team — not a replacement for "
-                "the FOMC, and not a claim to beat it.")
+st.sidebar.info("Independent & unsolicited — not affiliated with or endorsed by "
+                "the Federal Reserve. Decision-support and a red-team, not a "
+                "replacement for the FOMC.")
+st.sidebar.caption("Results are a model-internal ranking on an illustrative "
+                   "pilot: the objective re-simulates from the realized state and "
+                   "does not observe post-decision macro outcomes.")
 
 overview, livedata, scorecard, committee = st.tabs(
     ["Overview", "Live data", "Backtest scorecard", "Committee deliberation"]
